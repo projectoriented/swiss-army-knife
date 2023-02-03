@@ -71,7 +71,7 @@ rule browser_snapshots:
         '''
         if [ -s {input.bed} ]; then
             cd $( dirname {input.bed} )
-            {params.sessions_py} --regions_file $(basename {input.bed}) && pdfunite *.pdf {output.pdf} && mv {output.pdf} ../
+            {params.sessions_py} --regions_file $(basename {input.bed}) --server_url 'https://genome.ucsc.edu/' && pdfunite *.pdf {output.pdf} && mv {output.pdf} ../
         else
             touch {output.pdf}
         fi
