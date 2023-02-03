@@ -16,8 +16,7 @@ rule subset_sessions:
         hrs=12
     shell:
         '''
-        sed -r "s/(^hub_[0-9]{{3}}_)({wildcards.sample})(_\S+)(_\S+)(\s)([a-z]+)/\\1\\2\\3\\4 squish/" {input.sessions_file} > {output.subsetted_sessions} 
-        #sed -r "s/(^hub_[0-9]{{3}}_)(\S+)(_\S+)(_\S+)(\s)([a-z]+)/\\1\\2\\3\\4 squish/" {input.sessions_file} > {output.subsetted_sessions} 
+        sed -r "s/(^hub_[0-9]+_)({wildcards.sample})(_\S+)(_\S+)(\s)([a-z]+)/\\1\\2\\3\\4 squish/" {input.sessions_file} > {output.subsetted_sessions} 
         '''
 
 rule subset_bg_tsv:
