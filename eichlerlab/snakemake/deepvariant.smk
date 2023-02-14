@@ -43,7 +43,7 @@ rule split_bam_by_chrom:
         chr_bam_bai = temp('{sample}/{chr}-{tech}.bam.bai'),
     threads: 4
     resources:
-        mem = 1,
+        mem = lambda wildcards, attempt: attempt * 1,
         hrs=12,
     container: containers['samtools']
     shell:
@@ -61,7 +61,7 @@ rule deepvariant_by_chrom:
         vcf_gz = temp('{sample}/deepvariant/{sample}-{tech}-{chr}.vcf.gz'),
     threads: 8
     resources:
-        mem = 4,
+        mem = lambda wildcards, attempt, threads: attempt * (2 * threads),
         hrs=12,
     container: containers['deepvariant']
     benchmark: 'benchmarks/{sample}_{tech}-deepvariant_benchmark-{chr}.txt'
@@ -82,9 +82,9 @@ rule vcf_norm:
         vcf = rules.deepvariant_by_chrom.output.vcf_gz
     output:
         norm_vcf = '{sample}/deepvariant/{sample}-{tech}-{chr}.norm.vcf.gz'
-    threads: 2
+    threads: 1
     resources:
-        mem = 4,
+        mem = lambda wildcards, attempt, threads: attempt * (threads),
         hrs=72
     container: containers['bcftools']
     shell:
@@ -99,9 +99,9 @@ rule gather_vcfs:
     output:
         merged_vcf_gz = '{sample}/deepvariant/{sample}-{tech}.vcf.gz',
         merged_norm_vcf_gz = '{sample}/deepvariant/{sample}-{tech}.norm.vcf.gz',
-    threads: 2
+    threads: 1
     resources:
-        mem = 4,
+        mem = lambda wildcards, attempt: attempt * 2,
         hrs=72
     container: containers['bcftools']
     shell:
@@ -117,9 +117,9 @@ rule tabix:
     output:
         vcf_tbi = '{sample}/deepvariant/{sample}-{tech}.vcf.gz.tbi',
         vcf_norm_tbi = '{sample}/deepvariant/{sample}-{tech}.norm.vcf.gz.tbi',
-    threads: 4
+    threads: 1
     resources:
-        mem = 1,
+        mem = lambda wildcards, attempt: attempt * 2,
         hrs=12,
     container: containers['samtools']
     shell:
