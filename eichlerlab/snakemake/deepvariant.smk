@@ -79,9 +79,10 @@ rule deepvariant_by_chrom:
 
 rule vcf_norm:
     input:
-        vcf = rules.deepvariant_by_chrom.output.vcf_gz
+        vcf = rules.deepvariant_by_chrom.output.vcf_gz,
+        ref = ref
     output:
-        norm_vcf = '{sample}/deepvariant/{sample}-{tech}-{chr}.norm.vcf.gz'
+        norm_vcf = temp('{sample}/deepvariant/{sample}-{tech}-{chr}.norm.vcf.gz')
     threads: 1
     resources:
         mem = lambda wildcards, attempt, threads: attempt * (threads),
@@ -89,7 +90,7 @@ rule vcf_norm:
     container: containers['bcftools']
     shell:
         '''
-        bcftools norm {input.vcf} -Oz -o {output.norm_vcf}
+        bcftools norm -f {input.ref} {input.vcf} -Oz -o {output.norm_vcf}
         '''
 
 rule gather_vcfs:
