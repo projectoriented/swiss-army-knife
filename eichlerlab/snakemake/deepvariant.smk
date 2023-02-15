@@ -90,7 +90,7 @@ rule vcf_norm:
     container: containers['bcftools']
     shell:
         '''
-        bcftools norm -f {input.ref} {input.vcf} -Oz -o {output.norm_vcf}
+        bcftools filter --include 'FILTER="PASS"' {input.vcf} | bcftools norm --fasta-ref {input.ref} --output-type z --output {output.norm_vcf}
         '''
 
 rule gather_vcfs:

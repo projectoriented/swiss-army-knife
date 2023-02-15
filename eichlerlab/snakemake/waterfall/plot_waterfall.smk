@@ -110,7 +110,8 @@ rule subset_fasta:
         if [[ $(cat {input.strand}) =~ "-" ]];
             desired_arg="--reverse-complement"
         
-        samtools faidx {input.fasta} $desired_arg $(cat {input.id}) > {output.subset}
+        # get fasta and convert all to uppercase
+        samtools faidx {input.fasta} $desired_arg $(cat {input.id}) | sed -r 's/(^[A-Za-z].*)/\U\1/' > {output.subset}
         # add sample-hap to header
         sed -i "1 s/$/_{wildcards.sample}-{wildcards.hap}/" {output.subset}
             
