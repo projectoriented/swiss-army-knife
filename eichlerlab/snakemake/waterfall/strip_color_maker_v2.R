@@ -1,7 +1,11 @@
 # Author: Arvis Sulovari
 # Date last edited: 02/19/2020
+# Modifications are made to the original script for adaptability.
 # Goal: convert color-coded FASTA sequences into MSA_style sequence composition plots
 
+
+# Log stuff
+log <- file(snakemake@log[[1]], open="wt")
 
 # Define arguments (only 1 -- the region ID)
 args <- commandArgs(TRUE)
@@ -17,7 +21,7 @@ all_haps <- all_haps[all_haps %in% haps_keep]
 
 
 # Read in bed file with chr:start-end format region IDs. This will be placed as simple text at the bottom of plots.
-all_strvntr <- "MUC5AC"
+all_strvntr <- snakemake@params[["motif"]]
 
 top_3_colors <- c("#9E0142","#A90D44","#B41947")
 
@@ -33,18 +37,14 @@ sum_neighours <- function(myarr=c(1:10),nr_neigh=2){
   return(sum_arr)
 }
 
-
-
 ###check longest pure track for each haplotype file
 lpt_files <- vector()
 for (i in 1:length(all_haps)){
   tryCatch({curr_lpt <- read.delim(paste0("../fasta/", all_haps[i],"_MUC5AC_VNTRflanks.fasta.lpt"))}, error=function(e){})
   lpt_files <- c(lpt_files, curr_lpt[,1])
-
 }
 names(lpt_files) <- all_haps
 lpt_files <- lpt_files[rev(order(lpt_files))]
-
 
 #make list of data for samples and check to make sure they aren't empty!
 kmer_data <- list()
@@ -116,12 +116,8 @@ for(i in 1:length(re_sorted_names)){
 }
 
 
-
-
-
-
-  # START PLOTTING HERE
-pdf(file = "./MUC5AC_waterfall_HPRC_publication.pdf", width = 18,height = 14)
+# START PLOTTING HERE
+pdf(file = snakemake@output[['waterfall_pdf']], width = 18,height = 14)
 par(mfrow=c(length(re_sorted_names),1))
 par(mar=c(0,16,0,2))
 

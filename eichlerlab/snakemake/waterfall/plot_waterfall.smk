@@ -181,6 +181,22 @@ rule kmer_inplacemnt:
 
 rule plot_waterfall:
     input:
-        ''
+        fastas = expand('{sample}/{ref}/{sample}_{hap}-modded.fasta', sample=manifest_df.index, ref=ref, hap=['hap1', 'hap2']),
+        lpts = expand('{sample}/{ref}/{sample}_{hap}-modded.fasta.lpt', sample=manifest_df.index, ref=ref, hap=['hap1', 'hap2']),
     output:
-        ''
+        waterfall_pdf = ''
+    params:
+        motif=motif
+    envmodules:
+        "modules",
+        "modules-init",
+        "modules-gs/prod",
+        "modules-eichler/prod",
+        "pcre2/10.39",
+        "R/4.1.2",
+    threads: 1
+    resources:
+        mem = 1,
+        hrs=12
+    script:
+        "strip_color_maker_v2.R"
