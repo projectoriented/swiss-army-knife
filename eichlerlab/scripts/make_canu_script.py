@@ -14,7 +14,7 @@ ILLUMINA_READS_DIR = '/path/to/Illumina/WGS'
 LRA_DIR = '/path/to/clinical'
 
 
-def find_illumina_fofn(s, prefix=ILLUMINA_READS_DIR):
+def find_illumina_fofn(s, prefix):
     fp = [x for x in iglob(f'{prefix}/**/*.fofn', recursive=True) if s in x]
     if fp:
         return fp[0]
@@ -22,11 +22,11 @@ def find_illumina_fofn(s, prefix=ILLUMINA_READS_DIR):
         sys.exit(f'No Illumina fofn for {s}')
 
 
-def make_ont_fofn(sample, fn):
+def make_ont_fofn(sample, fn, prefix):
     pattern = r'(.*fastq\/)(.*)(\/guppy\/)(.*)\/(sup-prom)\/(.*fastq_pass\.fastq\.gz)'
     a = []
     file_list = glob(
-        f'{LRA_DIR}/{sample}/raw_data/nanopore/STD/**/*fastq_pass.fastq.gz',
+        f'{prefix}/{sample}/raw_data/nanopore/STD/**/*fastq_pass.fastq.gz',
         recursive=True)
     for f in file_list:
         match = re.findall(pattern, f)
@@ -45,11 +45,11 @@ def make_ont_fofn(sample, fn):
     return fofn_df['path'].to_csv(fn, header=False, index=False)
 
 
-def make_script(sample, trio=False):
+def make_script(sample, illumina_prefix, trio=False):
     family_id = re.findall(r'[a-zA-Z0-9]+', sample)[0]
 
-    mat_fofn = find_illumina_fofn(s=f'{family_id}_mo')
-    pat_fofn = find_illumina_fofn(s=f'{family_id}_fa')
+    mat_fofn = find_illumina_fofn(s=f'{family_id}_mo', prefix=illumina_prefix)
+    pat_fofn = find_illumina_fofn(s=f'{family_id}_fa', prefix=illumina_prefix)
 
     if trio:
         canu_script = (
@@ -75,6 +75,10 @@ def get_parser():
                         help='Supply sample(s) e.g. 14455_p1 14455_mo')
     parser.add_argument('--trio', required=False, help='Get script for trio. (default: False)',
                         action='store_true', default=False)
+    parser.add_argument('--lra', '-l', type=str, required=True,
+                        help='Parent directory of the long read archive')
+    parser.add_argument('--illumina', '-m', type=str, required=True,
+                        help='Parent directory of Illumina fastqz')
     return parser
 
 
@@ -85,14 +89,18 @@ def main():
 
     sample = args.sample
 
-    canu_script = make_script(sample, trio=args.trio)
+    # Fixate prefix.
+    prefix_lra = args.lra if args.lra else LRA_DIR
+    prefix_illumina = args.illumina if args.illumina else ILLUMINA_READS_DIR
+
+    canu_script = make_script(sample, trio=args.trio, illumina_prefix=prefix_illumina)
     canu_script_fn = f'run-canu_{sample}.sh'
     if args.trio:
         canu_script_fn = f'run-canu_{sample}-trio.sh'
 
     # Write ont-fofn.
     ont_fofn = f'{sample}-ont-guppy.fofn'
-    make_ont_fofn(sample, ont_fofn)
+    make_ont_fofn(sample, ont_fofn, prefix=prefix_lra)
 
     # Write canu script
     with open(canu_script_fn, 'w+') as f:
