@@ -42,7 +42,7 @@ def add_to_query_bed(a_df, b_bedtool_objects: list, b_bed_names: list):
     a_bed_obj = BedTool.from_dataframe(a_df)
     # b_bed_obj = BedTool.from_dataframe(df)
 
-    intersected = a_bed_obj.intersect(b_bedtool_objects, wa=True, wb=True)
+    intersected = a_bed_obj.intersect(b_bedtool_objects, loj=True)
 
     ab_headers = a_headers + list(chain(*map(lambda x: ['chrom' + x, 'start' + x, 'end' + x, x], b_bed_names)))
 
