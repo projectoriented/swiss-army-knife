@@ -2,7 +2,7 @@
 
 # Usage: ./make_ont_fofn.py --sample 14455_p1 --proj_dir path/to/clinical --output 14455_p1.fofn
 # This script will get you all the fastqs that belong to a major version of guppy for STD library
-# future implementations will include: --filter_string 'lib=STD;model=sup-prom;version=6.1.2'
+# future implementations will include: --filter_string 'lib=STD;model=sup-prom;ver=6;bc=guppy'
 # Slack/email me if you experience any problems or want additional features, wumei@uw.edu
 
 from glob import iglob
@@ -13,27 +13,40 @@ import argparse
 import os
 
 
-def make_ont_fofn(sample, fn, prefix):
-    pattern = r'(.*fastq\/)(.*)(\/guppy\/)(.*)\/(sup-prom)\/(.*fastq_pass\.fastq\.gz)'
+def make_ont_fofn(sample, fn, prefix, fltr_str):
+    fltr_dict = {
+        'bc': 'guppy',
+        'model': 'sup-prom',
+        'ver': '6',
+        'lib': 'STD'
+    }
+    if fltr_str:
+        alt_fltr_list = fltr_str.split(';')
+        alt_fltr_dict = dict([x.split('=') for x in alt_fltr_list])
+        fltr_dict.update(alt_fltr_dict)
+
+    basecaller = fltr_dict['bc']
+    model = fltr_dict['model']
+    version = fltr_dict['ver']
+    library = fltr_dict['lib']
+
+    regex = fr'(.*nanopore)/(?P<lib>{library})/(.*fastq)/(?P<runid>.*)/(?P<bc>{basecaller})/(?P<ver>{version}.*)/(?P<model>{model})/(?P<fn>.*fastq_pass\.fastq\.gz)'
+    search_pattern = re.compile(regex)
     a = []
-    search_path = os.path.join(prefix, sample, 'raw_data/nanopore/STD/**/*fastq_pass.fastq.gz')
+    search_path = os.path.join(prefix, sample, 'raw_data/nanopore/*/**/*fastq_pass.fastq.gz')
 
     file_list = iglob(search_path, recursive=True)
     for f in file_list:
-        match = re.findall(pattern, f)
+        match = search_pattern.match(f)
         if match:
-            d = {}
-            match = match[0]
-            d['sample'] = sample
-            d['flow_cell'] = match[1]
-            d['version'] = match[3]
-            d['model'] = match[4]
-            d['path'] = f
-            a.append(d)
+            match_dict = match.groupdict()
+            match_dict['fpath'] = f
+            a.append(match_dict)
 
     fofn_df = pd.DataFrame(a)
-    fofn_df.drop_duplicates(subset=['sample', 'flow_cell'], keep='last', inplace=True)
-    return fofn_df['path'].to_csv(fn, header=False, index=False)
+    if fofn_df.empty:
+        sys.exit(f'No fastq.gz matched the filter- please try again :)')
+    return fofn_df['fpath'].to_csv(fn, header=False, index=False)
 
 
 def main():
@@ -41,7 +54,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    make_ont_fofn(sample=args.sample, fn=args.output, prefix=args.proj_dir)
+    make_ont_fofn(sample=args.sample, fn=args.output, prefix=args.proj_dir, fltr_str=args.filter_string)
 
 
 def get_parser():
@@ -54,6 +67,8 @@ def get_parser():
     parser.add_argument('--sample', type=str, required=True,
                         help='e.g. 14455_p1')
     parser.add_argument('--proj_dir', type=str, required=True,
+                        help='Absolute path for project directory where fast5s are found.')
+    parser.add_argument('--filter_string', type=str, required=False,
                         help='Absolute path for project directory where fast5s are found.')
     parser.add_argument('--output', '-o', type=str, required=False, default=sys.stdout,
                         help='Output')
