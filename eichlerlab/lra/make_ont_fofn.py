@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Usage: ./make_ont_fofn.py --sample 14455_p1 --proj_dir path/to/clinical --output 14455_p1.fofn --filter_string 'lib=STD;model=sup-prom;bc=guppy;ver=6'
+# Usage: ./make_ont_fofn.py --sample 14455_p1 --proj_dir absolute/path/to/clinical --output 14455_p1.fofn --filter_string 'lib=STD;model=sup-prom;bc=guppy;ver=6'
 # This script will get you all the fastqs that belong to guppy ver 6.x.x for STD library
 # Slack/email me if you experience any problems or want additional features, wumei@uw.edu
 
