@@ -68,7 +68,7 @@ def get_parser():
     parser.add_argument('--proj_dir', type=str, required=True,
                         help='Absolute path for project directory where fast5s are found.')
     parser.add_argument('--filter_string', type=str, required=False,
-                        help='Absolute path for project directory where fast5s are found.')
+                        help='A filter string of k=v delimited by ; and have any of these keys: (bc, model, ver, lib)')
     parser.add_argument('--output', '-o', type=str, required=False, default=sys.stdout,
                         help='Output')
 
