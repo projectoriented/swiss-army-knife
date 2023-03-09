@@ -19,7 +19,7 @@ containers = {
 }
 
 
-# Regular functions
+# --- Regular Functions --- #
 def amnt_flank(len_diff: int) -> int:
     if len_diff < 100:
         return 20
@@ -37,31 +37,37 @@ def amnt_flank(len_diff: int) -> int:
         return 300
 
 
-# Input functions
+def construct_file_names(l: list) -> list:
+    def parse_region(string):
+        pattern_one = re.compile(r"(?P<contig>.+):(?P<pos>\d+)-(?P<end>\d+)")
+        pattern_two = re.compile(r"(?P<contig>.+)-(?P<pos>\d+)-(?P<svtype>\S+)-(?P<svlen>\d+)")
+        if string.find(":") >= 0:
+            match = pattern_one.match(string).groupdict()
+        else:
+            match = pattern_two.match(string).groupdict()
+            match["end"] = int(match["pos"]) + int(match["svlen"])
+        return match
+
+    file_names = []
+    for entry in l:
+        d = parse_region(entry)
+
+        len_diff = int(d["end"]) - int(d["pos"])
+        d['flank'] = amnt_flank(len_diff=len_diff)
+
+        formatted_fn = "stats_{contig}_{pos}-{end}_F-{flank}".format(**d)
+        file_names.append(formatted_fn)
+    return file_names
+
+
+# --- Input functions --- #
 def get_aln(wildcards):
     return manifest_df.at[wildcards.sample, "aln"]
 
-
-# def get_interval(wildcards):
-#     # right now we assume just one region
-#     # def inner(wildcards):
-#     #     region_str = str(manifest_df.at[wildcards.sample, 'region'])
-#     #     region_df = pd.MultiIndex.from_tuples(product([wildcards.sample],region_str.split(',')), names=('sample','region'))
-#     region_str = str(manifest_df.at[wildcards.sample, "region"])
-#
-#     def parse_region(string):
-#         pattern = re.compile(
-#             r"(?P<contig>.+)-(?P<spos>\d+)-(?P<svtype>\S+)-(?P<svlen>\d+)"
-#         )
-#         match = pattern.match(string).groupdict()
-#         end_pos = match["spos"] + match["svlen"]
-#         return match["contig"] + ":" + match["spos"] + "-" + end_pos
-#
-#     return region_str if region_str.find(":") else parse_region(region_str)
-
-
-def final_output(wildcards):
-    pass
+def collect_all_files(wildcards) -> list:
+    region_list = df.at[wildcards.sample, 'region'].split(',')
+    nested_list = [['gatk4_depth'],[wildcards.sample], construct_file_names(region_list), ['tsv']]
+    return ['{}/{}_{}.{}'.format(*x) for x in product(*nested_list)]
 
 
 wildcard_constraints:
@@ -74,7 +80,7 @@ rule gatk4_depth:
         bam=get_aln,
     output:
         sample_depth=temp(
-            "{sample}/gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}.csv"
+            "gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}.csv"
         ),
     threads: 1
     resources:
@@ -101,7 +107,7 @@ rule transform_output:
         sample_depth=rules.gatk4_depth.output.sample_depth,
     output:
         region_stats=temp(
-            "{sample}/gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}.tsv"
+            "gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}.tsv"
         ),
     threads: 1
     resources:
@@ -146,7 +152,7 @@ rule transform_output:
 
         # Combine the dictionaries
         final_dict = {
-                "SAMPLE": wildcards.sample,
+            "SAMPLE": wildcards.sample,
                 "REGION": interval,
                 **left_side,
                 **target_region,
@@ -155,13 +161,13 @@ rule transform_output:
 
         # Write out
         pd.DataFrame.from_dict([final_dict]).to_csv(
-            output.region_stats, index=False, sep="\t"
+        output.region_stats, index=False, sep="\t"
         )
 
 
 rule merge:
     input:
-        region_stats=expand(rules.transform_output.output.region_stats),
+        region_stats=collect_all_files,
     output:
         merged_stats="depth_stats.tsv.gz",
     threads: 1
