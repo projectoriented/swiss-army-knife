@@ -135,11 +135,13 @@ rule transform_output:
         left_side = (
             df.loc[0:flank, target_column]
             .agg({"L_MEAN": "mean", "L_MIN": "min"})
+            .astype(int)
             .to_dict()
         )
         right_side = (
             df.loc[flank:total, target_column]
             .agg({"R_MEAN": "mean", "R_MIN": "min"})
+            .astype(int)
             .to_dict()
         )
 
@@ -147,6 +149,7 @@ rule transform_output:
         target_region = (
             df.loc[flank:end_pos, target_column]
             .agg({"MEAN": "mean", "MIN": "min"})
+            .astype(int)
             .to_dict()
         )
 
