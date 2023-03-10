@@ -25,7 +25,7 @@ def parse_b_beds(fn):
         if header == 0:
             return ';'.join(row.index[0:].astype(str) + '=' + row[0:].astype(str))
         else:
-            return ((len(row)-1)*"{};" + "{}").format(*row.tolist())
+            return ((len(row) - 1) * "{};" + "{}").format(*row.tolist())
 
     essential_bed['info'] = df.apply(lambda x: reformat(x), axis=1)
     del df
@@ -36,20 +36,21 @@ def parse_b_beds(fn):
     return essential_bed
 
 
-def add_to_query_bed(a_df, b_bedtool_objects: list, b_bed_names: list):
+def add_to_query_bed(a_df, b_bed, b_bed_name):
     a_headers = a_df.columns.str.upper().tolist()
 
     a_bed_obj = BedTool.from_dataframe(a_df)
-    # b_bed_obj = BedTool.from_dataframe(df)
 
-    intersected = a_bed_obj.intersect(b_bedtool_objects, loj=True)
+    intersected = a_bed_obj.intersect(b_bed, loj=True, wa=True)
 
-    ab_headers = a_headers + list(chain(*map(lambda x: ['chrom' + x, 'start' + x, 'end' + x, x], b_bed_names)))
+    ab_headers = a_headers + list(chain(*map(lambda x: ['chrom' + x, 'start' + x, 'end' + x, x], [b_bed_name])))
 
     intersected_df = intersected.to_dataframe(names=ab_headers)
-    # intersected_df = pd.DataFrame.from_records([f[0:len(a_headers)] + f[-1:] for f in intersected], columns=a_headers+[b_bed_name])
 
-    return intersected_df[a_headers + b_bed_names].sort_values(intersected_df.columns[:2].tolist())
+    intersected_df = intersected_df[a_headers + [b_bed_name]].sort_values(intersected_df.columns[:2].tolist())
+    intersected_df.set_index(a_headers, inplace=True)
+
+    return intersected_df
 
 
 def get_parser():
@@ -74,14 +75,13 @@ def main():
     df_a = pd.read_csv(args.a, sep='\t', header=0, low_memory=False)
     bed_names = args.bn
 
-    b_dict = {}
+    final_df = pd.DataFrame()
     for idx, b in enumerate(args.b):
         b_bt_object = BedTool.from_dataframe(parse_b_beds(b))
-        b_dict[bed_names[idx]] = b_bt_object
+        final_df = pd.concat([final_df, add_to_query_bed(a_df=df_a, b_bed=b_bt_object, b_bed_name=bed_names[idx])],
+                             axis=1)
 
-    b_df_collection = list(b_dict.values())
-    final_df = add_to_query_bed(a_df=df_a, b_bedtool_objects=b_df_collection, b_bed_names=bed_names)
-    final_df.to_csv(args.output, sep='\t', header=True, index=False)
+    final_df.to_csv(args.output, sep='\t', header=True)
 
 
 if __name__ == "__main__":
