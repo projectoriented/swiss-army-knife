@@ -26,6 +26,9 @@ wildcard_constraints:
 
 # --- Regular Functions --- #
 def amnt_flank(len_diff: int) -> int:
+    """
+    This function is tuned for structural variants and taken from ebert 2021 science paper.
+    """
     if len_diff < 100:
         return 20
     elif 100 <= len_diff < 200:
@@ -193,9 +196,10 @@ rule merge:
         hrs=72,
     run:
         df = pd.concat(
-            [pd.read_csv(item, header=0, sep="\t") for item in input.region_stats], axis=1, join='inner'
+            [pd.read_csv(item, header=0, sep="\t", index_col=['REGION', 'INFO']) for item in input.region_stats]
+            ,axis=1
         )
 
         # Implement parent stuff here in the future
         # Write out
-        df.to_csv(output.merged_stats, index=False, header=True, sep="\t")
+        df.to_csv(output.merged_stats, header=True, sep="\t")
