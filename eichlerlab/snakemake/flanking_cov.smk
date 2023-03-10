@@ -9,7 +9,7 @@ configfile: "config.yaml"
 
 manifest = config.get("manifest", "manifest.tab")
 ref = config.get("ref")
-MIN_BASE_Q = config.get("min_base_q")
+MIN_BASE_Q = config.get("min_base_q", 40)
 
 
 manifest_df = pd.read_csv(manifest, sep="\t", index_col="sample")
@@ -17,6 +17,10 @@ manifest_df = pd.read_csv(manifest, sep="\t", index_col="sample")
 containers = {
     "gatk4": config["img"]["gatk4"],
 }
+
+
+wildcard_constraints:
+    sample="|".join(manifest_df.index),
 
 
 # --- Regular Functions --- #
@@ -37,17 +41,19 @@ def amnt_flank(len_diff: int) -> int:
         return 300
 
 
+
 def construct_file_names(l: list) -> list:
-    def parse_region(string):
+    def parse_region(string: str) -> dict:
         pattern_one = re.compile(r"(?P<contig>.+):(?P<pos>\d+)-(?P<end>\d+)")
         pattern_two = re.compile(r"(?P<contig>.+)-(?P<pos>\d+)-(?P<svtype>\S+)-(?P<svlen>\d+)")
         if string.find(":") >= 0:
             match = pattern_one.match(string).groupdict()
+            match['alt_id'] = 'NA'
         else:
             match = pattern_two.match(string).groupdict()
             match["end"] = int(match["pos"]) + int(match["svlen"])
+            match['alt_id'] = string
         return match
-
     file_names = []
     for entry in l:
         d = parse_region(entry)
@@ -55,7 +61,7 @@ def construct_file_names(l: list) -> list:
         len_diff = int(d["end"]) - int(d["pos"])
         d['flank'] = amnt_flank(len_diff=len_diff)
 
-        formatted_fn = "stats_{contig}_{pos}-{end}_F-{flank}".format(**d)
+        formatted_fn = "stats_{contig}_{pos}-{end}_F-{flank}_{alt_id}".format(**d)
         file_names.append(formatted_fn)
     return file_names
 
@@ -63,6 +69,7 @@ def construct_file_names(l: list) -> list:
 # --- Input functions --- #
 def get_aln(wildcards):
     return manifest_df.at[wildcards.sample, "aln"]
+
 
 def collect_all_files(_) -> list:
     sample_list = manifest_df.index
@@ -73,8 +80,11 @@ def collect_all_files(_) -> list:
     return list(chain.from_iterable(map(get_formatted, sample_list)))
 
 
-wildcard_constraints:
-    sample="|".join(manifest_df.index),
+def get_interval(wildcards):
+    if wildcards.alt_id == 'NA':
+        return f"{wildcards.contig}:{wildcards.pos}-{end_pos}"
+    else:
+        return wildcards.alt_id
 
 
 rule gatk4_depth:
@@ -83,7 +93,7 @@ rule gatk4_depth:
         bam=get_aln,
     output:
         sample_depth=temp(
-            "gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}.csv"
+            "gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}_{alt_id}.csv"
         ),
     threads: 1
     resources:
@@ -92,7 +102,7 @@ rule gatk4_depth:
     container:
         containers["gatk4"]
     params:
-        interval=lambda wildcards: f"{wildcards.contig}:{wildcards.pos}-{wildcards.end}",
+        interval=get_interval,
         flank=lambda wildcards: amnt_flank(int(wildcards.flank)),
     shell:
         """
@@ -110,14 +120,14 @@ rule transform_output:
         sample_depth=rules.gatk4_depth.output.sample_depth,
     output:
         region_stats=temp(
-            "gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}.tsv"
+            "gatk4_depth/{sample}_stats_{contig}_{pos}-{end}_F-{flank}_{alt_id}.tsv"
         ),
     threads: 1
     resources:
         mem=lambda wildcards, attempt: attempt * 2,
         hrs=72,
     params:
-        svlen="",
+        native_id=get_interval(what_type='interval'),
     run:
         df = pd.read_csv(input.sample_depth, header=0)
 
@@ -125,11 +135,7 @@ rule transform_output:
         total = int(df.shape[0])
         end_pos = int(wildcards.end)
         target_column = "Total_Depth"
-        interval = (
-            f"{wildcards.contig}:{wildcards.pos}-{end_pos}"
-            if not params.svlen
-            else params.svlen
-        )
+        id = params.native_id
 
         # Get the depth (mean + min) for both left and right flanking regions
         left_side = (
@@ -145,10 +151,16 @@ rule transform_output:
             .to_dict()
         )
 
-        # Get the mean depth for target region
+        # Get the std from mean depth for target region
+        def get_n_std(x):
+            n=2
+            mu = x.mean()
+            std = x.std()
+            return mu + std * n
+
         target_region = (
             df.loc[flank:end_pos, target_column]
-            .agg({"MEAN": "mean", "MIN": "min"})
+            .agg({"MEAN": "mean", "2_STD": get_n_std})
             .astype(int)
             .to_dict()
         )
@@ -159,11 +171,11 @@ rule transform_output:
         # Combine the dictionaries
         final_dict = {
             "SAMPLE": wildcards.sample,
-                "REGION": interval,
-                **left_side,
-                **target_region,
-                **right_side,
-            }
+            "REGION": id,
+            **left_side,
+            **target_region,
+            **right_side,
+        }
 
         # Write out
         pd.DataFrame.from_dict([final_dict]).to_csv(
