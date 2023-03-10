@@ -173,7 +173,7 @@ rule transform_output:
         final_dict = {
             "REGION": id,
             "INFO": order_cols,
-            wildcards.sample: ':'.join(final_list),
+            wildcards.sample: ':'.join(map(str,final_list)),
         }
 
         # Write out
