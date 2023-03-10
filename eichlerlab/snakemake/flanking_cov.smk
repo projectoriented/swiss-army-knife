@@ -10,6 +10,7 @@ configfile: "config.yaml"
 manifest = config.get("manifest", "manifest.tab")
 ref = config.get("ref")
 MIN_BASE_Q = config.get("min_base_q", 40)
+STD = config.get('std', 2)
 
 
 manifest_df = pd.read_csv(manifest, sep="\t", index_col="sample")
@@ -80,13 +81,8 @@ def collect_all_files(_) -> list:
     return list(chain.from_iterable(map(get_formatted, sample_list)))
 
 
-def get_interval(what_type):
-    def inner(wildcards):
-        if what_type == 'interval':
-            return f"{wildcards.contig}:{wildcards.pos}-{wildcards.end}"
-        else:
-            return wildcards.alt_id
-    return inner
+def get_interval(wildcards):
+    return f"{wildcards.contig}:{wildcards.pos}-{wildcards.end}"
 
 
 rule gatk4_depth:
@@ -104,7 +100,7 @@ rule gatk4_depth:
     container:
         containers["gatk4"]
     params:
-        interval=get_interval(what_type='interval'),
+        interval=get_interval,
         flank=lambda wildcards: amnt_flank(int(wildcards.flank)),
     shell:
         """
@@ -129,54 +125,55 @@ rule transform_output:
         mem=lambda wildcards, attempt: attempt * 2,
         hrs=72,
     params:
-        native_id=lambda wildcards: get_interval(what_type='interval') if wildcards.alt_id == 'NA' else get_interval(what_type='native_id'),
+        native_id=lambda wildcards: get_interval if wildcards.alt_id == 'NA' else wildcards.alt_id
     run:
         df = pd.read_csv(input.sample_depth, header=0)
 
+        # Definitions
         flank = int(wildcards.flank)
         total = int(df.shape[0])
         end_pos = int(wildcards.end)
+
         target_column = "Total_Depth"
         id = params.native_id
+        order_cols = ':'.join(['L_MEAN', 'L_MIN', f'{STD}_STD', 'MIN', 'R_MEAN', 'R_MIN'])
 
         # Get the depth (mean + min) for both left and right flanking regions
         left_side = (
             df.loc[0:flank, target_column]
-            .agg({"L_MEAN": "mean", "L_MIN": "min"})
+            .agg(['mean', 'min'])
             .astype(int)
-            .to_dict()
+            .to_list()
         )
         right_side = (
             df.loc[flank:total, target_column]
-            .agg({"R_MEAN": "mean", "R_MIN": "min"})
+            .agg(['mean', 'min'])
             .astype(int)
-            .to_dict()
+            .to_list()
         )
 
         # Get the std from mean depth for target region
         def get_n_std(x):
-            n=2
             mu = x.mean()
             std = x.std()
-            return mu + std * n
+            return mu + std * STD
 
         target_region = (
             df.loc[flank:end_pos, target_column]
-            .agg({"MEAN": "mean", "2_STD": get_n_std})
+            .agg([get_n_std, 'min'])
             .astype(int)
-            .to_dict()
+            .to_list()
         )
 
         # Clean up
         del df
 
-        # Combine the dictionaries
+        # Combine
+        final_list = left_side + target_region + right_side
         final_dict = {
-            "SAMPLE": wildcards.sample,
             "REGION": id,
-            **left_side,
-            **target_region,
-            **right_side,
+            "INFO": order_cols,
+            wildcards.sample: ':'.join(final_list),
         }
 
         # Write out
@@ -196,7 +193,7 @@ rule merge:
         hrs=72,
     run:
         df = pd.concat(
-            [pd.read_csv(item, header=0, sep="\t") for item in input.region_stats]
+            [pd.read_csv(item, header=0, sep="\t") for item in input.region_stats], axis=1, join='inner'
         )
 
         # Implement parent stuff here in the future
