@@ -88,6 +88,13 @@ def get_interval(wildcards):
     return f"{wildcards.contig}:{wildcards.pos}-{wildcards.end}"
 
 
+# --- Target rule --- #
+rule all:
+    input:
+        'depth_stats.tsv.gz'
+
+
+# --- Action rules --- #
 rule gatk4_depth:
     input:
         fa=ref,
