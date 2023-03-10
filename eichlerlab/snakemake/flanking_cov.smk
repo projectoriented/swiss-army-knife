@@ -200,6 +200,9 @@ rule merge:
             ,axis=1
         )
 
+        # Merge duplicated columns into one
+        df = df.groupby(df.columns,axis=1).first()
+
         # Implement parent stuff here in the future
         # Write out
         df.to_csv(output.merged_stats, header=True, sep="\t")
