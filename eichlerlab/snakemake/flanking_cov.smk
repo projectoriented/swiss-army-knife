@@ -83,7 +83,7 @@ def collect_all_files(_) -> list:
 def get_interval(what_type):
     def inner(wildcards):
         if what_type == 'interval':
-            return f"{wildcards.contig}:{wildcards.pos}-{end_pos}"
+            return f"{wildcards.contig}:{wildcards.pos}-{wildcards.end}"
         else:
             return wildcards.alt_id
     return inner
