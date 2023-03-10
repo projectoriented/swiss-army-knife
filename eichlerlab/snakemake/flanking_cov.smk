@@ -127,7 +127,7 @@ rule transform_output:
         mem=lambda wildcards, attempt: attempt * 2,
         hrs=72,
     params:
-        native_id=get_interval(what_type='interval'),
+        native_id=get_interval,
     run:
         df = pd.read_csv(input.sample_depth, header=0)
 
