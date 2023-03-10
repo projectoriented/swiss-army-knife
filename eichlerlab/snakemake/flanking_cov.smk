@@ -80,11 +80,13 @@ def collect_all_files(_) -> list:
     return list(chain.from_iterable(map(get_formatted, sample_list)))
 
 
-def get_interval(wildcards):
-    if wildcards.alt_id == 'NA':
-        return f"{wildcards.contig}:{wildcards.pos}-{end_pos}"
-    else:
-        return wildcards.alt_id
+def get_interval(what_type):
+    def inner(wildcards):
+        if what_type == 'interval':
+            return f"{wildcards.contig}:{wildcards.pos}-{end_pos}"
+        else:
+            return wildcards.alt_id
+    return inner
 
 
 rule gatk4_depth:
@@ -102,7 +104,7 @@ rule gatk4_depth:
     container:
         containers["gatk4"]
     params:
-        interval=get_interval,
+        interval=get_interval(what_type='interval'),
         flank=lambda wildcards: amnt_flank(int(wildcards.flank)),
     shell:
         """
@@ -127,7 +129,7 @@ rule transform_output:
         mem=lambda wildcards, attempt: attempt * 2,
         hrs=72,
     params:
-        native_id=get_interval,
+        native_id=lambda wildcards: get_interval(what_type='interval') if wildcards.alt_id == 'NA' else get_interval(what_type='native_id'),
     run:
         df = pd.read_csv(input.sample_depth, header=0)
 
