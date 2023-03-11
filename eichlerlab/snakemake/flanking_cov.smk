@@ -78,7 +78,10 @@ def get_aln(wildcards):
 def collect_all_files(_) -> list:
     sample_list = manifest_df.index
     def get_formatted(s):
-        region_list = manifest_df.at[s, 'region'].split(',')
+        try:
+            region_list = manifest_df.at[s, 'region'].split(',')
+        except AttributeError:
+            region_list = manifest_df.at[s, 'region']
         nested_list = [['gatk4_depth'],[s], construct_file_names(region_list), ['tsv']]
         return ['{}/{}_{}.{}'.format(*x) for x in product(*nested_list)]
     return list(chain.from_iterable(map(get_formatted, sample_list)))
