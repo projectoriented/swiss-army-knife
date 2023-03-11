@@ -41,7 +41,7 @@ def add_to_query_bed(a_df, b_bed, b_bed_name):
 
     a_bed_obj = BedTool.from_dataframe(a_df)
 
-    intersected = a_bed_obj.intersect(b_bed, loj=True, wa=True)
+    intersected = a_bed_obj.intersect(b_bed, loj=True, u=True)
 
     ab_headers = a_headers + list(chain(*map(lambda x: ['chrom' + x, 'start' + x, 'end' + x, x], [b_bed_name])))
 
@@ -73,14 +73,21 @@ def main():
     args = parser.parse_args()
 
     df_a = pd.read_csv(args.a, sep='\t', header=0, low_memory=False)
+    essential_df = df_a.iloc[:, :3].copy()
+    df_a = df_a.iloc[:, 3:]
+
     bed_names = args.bn
 
     final_df = pd.DataFrame()
     for idx, b in enumerate(args.b):
+        print(f'parsing {b}')
         b_bt_object = BedTool.from_dataframe(parse_b_beds(b))
-        final_df = pd.concat([final_df, add_to_query_bed(a_df=df_a, b_bed=b_bt_object, b_bed_name=bed_names[idx])],
+        intersected = add_to_query_bed(a_df=essential_df, b_bed=b_bt_object, b_bed_name=bed_names[idx])
+        final_df = pd.concat([final_df, intersected],
                              axis=1)
+        print(f'intersected {b}')
 
+    final_df = pd.concat([final_df, df_a])
     final_df.to_csv(args.output, sep='\t', header=True)
 
 
