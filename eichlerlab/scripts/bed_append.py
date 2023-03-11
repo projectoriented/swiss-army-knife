@@ -41,16 +41,27 @@ def add_to_query_bed(a_df, b_bed, b_bed_name):
 
     a_bed_obj = BedTool.from_dataframe(a_df)
 
-    intersected = a_bed_obj.intersect(b_bed, loj=True, u=True)
+    b_bed = b_bed.sort()
+    intersected = a_bed_obj.intersect(b_bed, loj=True, wa=True)
 
     ab_headers = a_headers + list(chain(*map(lambda x: ['chrom' + x, 'start' + x, 'end' + x, x], [b_bed_name])))
 
     intersected_df = intersected.to_dataframe(names=ab_headers)
 
     intersected_df = intersected_df[a_headers + [b_bed_name]].sort_values(intersected_df.columns[:2].tolist())
+    intersected_df.drop_duplicates(subset=intersected_df.columns[:2], inplace=True)
     intersected_df.set_index(a_headers, inplace=True)
 
     return intersected_df
+
+
+def bedtools_intersect(a_df, b_bed):
+    a_bed_obj = BedTool.from_dataframe(a_df)
+    b_bed = b_bed.sort()
+    intersected = a_bed_obj.intersect(b_bed, loj=True, wa=True)
+    intersected_df = intersected.to_dataframe()
+    result_column = intersected_df.iloc[:, -1:]
+    return result_column
 
 
 def get_parser():
@@ -81,14 +92,14 @@ def main():
     final_df = pd.DataFrame()
     for idx, b in enumerate(args.b):
         print(f'parsing {b}')
-        b_bt_object = BedTool.from_dataframe(parse_b_beds(b))
-        intersected = add_to_query_bed(a_df=essential_df, b_bed=b_bt_object, b_bed_name=bed_names[idx])
-        final_df = pd.concat([final_df, intersected],
-                             axis=1)
+        bed_object = BedTool.from_dataframe(parse_b_beds(b))
+        intersected = add_to_query_bed(a_df=essential_df, b_bed=bed_object, b_bed_name=bed_names[idx])
+        final_df = pd.concat([final_df, intersected], axis=1)
         print(f'intersected {b}')
 
-    final_df = pd.concat([final_df, df_a])
-    final_df.to_csv(args.output, sep='\t', header=True)
+    final_df.reset_index(inplace=True, drop=True)
+    final_df = pd.concat([essential_df, df_a, final_df], axis=1)
+    final_df.to_csv(args.output, sep='\t', header=True, index=False)
 
 
 if __name__ == "__main__":
