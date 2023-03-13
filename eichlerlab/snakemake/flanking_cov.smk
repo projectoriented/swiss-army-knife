@@ -10,7 +10,6 @@ configfile: "config.yaml"
 manifest = config.get("manifest", "manifest.tab")
 ref = config.get("ref")
 MIN_BASE_Q = config.get("min_base_q", 40)
-STD = config.get('std', 2)
 
 
 manifest_df = pd.read_csv(manifest, sep="\t", index_col="sample")
@@ -149,7 +148,7 @@ rule transform_output:
 
         target_column = "Total_Depth"
         id = params.native_id
-        order_cols = ':'.join(['L_MEAN', 'L_MIN', f'{STD}_STD', 'MIN', 'R_MEAN', 'R_MIN'])
+        order_cols = ':'.join(['L_MEAN', 'L_MIN', 'SD', 'MEAN', 'R_MEAN', 'R_MIN'])
 
         # Get the depth (mean + min) for both left and right flanking regions
         left_side = (
@@ -164,16 +163,10 @@ rule transform_output:
             .astype(int)
             .to_list()
         )
-
-        # Get the std from mean depth for target region
-        def get_n_std(x):
-            mu = x.mean()
-            std = x.std()
-            return mu + std * STD
-
+        # Get the depth (sd + mean) for target region
         target_region = (
             df.loc[flank:end_pos, target_column]
-            .agg([get_n_std, 'min'])
+            .agg(['sd', 'mean'])
             .astype(int)
             .to_list()
         )
