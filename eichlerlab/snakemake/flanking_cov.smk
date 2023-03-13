@@ -144,29 +144,29 @@ rule transform_output:
         # Definitions
         flank = int(wildcards.flank)
         total = int(df.shape[0])
-        end_pos = int(wildcards.end)
+        len_diff = int(wildcards.end) - int(wildcards.pos)
 
         target_column = "Total_Depth"
         id = params.native_id
-        order_cols = ':'.join(['L_MEAN', 'L_MIN', 'SD', 'MEAN', 'R_MEAN', 'R_MIN'])
+        order_cols = ':'.join(['L_MEAN', 'L_MIN', 'SD', 'MEAN', 'R_MIN', 'R_MEAN'])
 
         # Get the depth (mean + min) for both left and right flanking regions
         left_side = (
-            df.loc[0:flank, target_column]
+            df.loc[0:(flank - 1), target_column]
             .agg(['mean', 'min'])
             .astype(int)
             .to_list()
         )
         right_side = (
-            df.loc[flank:total, target_column]
-            .agg(['mean', 'min'])
+            df.loc[(flank + 1):total, target_column]
+            .agg(['min', 'mean'])
             .astype(int)
             .to_list()
         )
         # Get the depth (sd + mean) for target region
         target_region = (
-            df.loc[flank:end_pos, target_column]
-            .agg(['sd', 'mean'])
+            df.loc[flank:(len_diff + flank), target_column]
+            .agg(['std', 'mean'])
             .astype(int)
             .to_list()
         )
@@ -180,6 +180,7 @@ rule transform_output:
             "REGION": id,
             "INFO": order_cols,
             wildcards.sample: ':'.join(map(str,final_list)),
+            "FLANK (bp)": wildcards.flank
         }
 
         # Write out
@@ -199,7 +200,7 @@ rule merge:
         hrs=72,
     run:
         df = pd.concat(
-            [pd.read_csv(item, header=0, sep="\t", index_col=['REGION', 'INFO']) for item in input.region_stats]
+            [pd.read_csv(item, header=0, sep="\t", index_col=['REGION', 'INFO', 'FLANK (bp)']) for item in input.region_stats]
             ,axis=1
         )
 
