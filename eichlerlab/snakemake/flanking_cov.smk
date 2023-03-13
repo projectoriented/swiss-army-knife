@@ -73,6 +73,8 @@ def construct_file_names(l: list) -> list:
 def get_aln(wildcards):
     return manifest_df.at[wildcards.sample, "aln"]
 
+def get_origin(wildcards):
+    return manifest_df.at[wildcards.sample, "origin"]
 
 def collect_all_files(_) -> list:
     sample_list = manifest_df.index
@@ -85,6 +87,10 @@ def collect_all_files(_) -> list:
         return ['{}/{}_{}.{}'.format(*x) for x in product(*nested_list)]
     return list(chain.from_iterable(map(get_formatted, sample_list)))
 
+def get_final_outputs(wildcards):
+    outputs = ['depth_stats.tsv.gz']
+    return outputs
+
 
 def get_interval(wildcards):
     return f"{wildcards.contig}:{wildcards.pos}-{wildcards.end}"
@@ -93,7 +99,7 @@ def get_interval(wildcards):
 # --- Target rule --- #
 rule all:
     input:
-        'depth_stats.tsv.gz'
+        get_final_outputs
 
 
 # --- Action rules --- #
@@ -137,7 +143,8 @@ rule transform_output:
         mem=lambda wildcards, attempt: attempt * 2,
         hrs=72,
     params:
-        native_id=lambda wildcards: get_interval if wildcards.alt_id == 'NA' else wildcards.alt_id
+        native_id=lambda wildcards: get_interval if wildcards.alt_id == 'NA' else wildcards.alt_id,
+        origin=get_origin
     run:
         df = pd.read_csv(input.sample_depth, header=0)
 
@@ -180,7 +187,8 @@ rule transform_output:
             "REGION": id,
             "INFO": order_cols,
             wildcards.sample: ':'.join(map(str,final_list)),
-            "FLANK (bp)": wildcards.flank
+            "FLANK (bp)": wildcards.flank,
+            "ORIGIN": params.origin
         }
 
         # Write out
@@ -193,20 +201,26 @@ rule merge:
     input:
         region_stats=collect_all_files,
     output:
-        merged_stats="depth_stats.tsv.gz",
+        merged_stats="depth_stats.tsv.gz"
     threads: 1
     resources:
         mem=lambda wildcards, attempt: attempt * 2,
         hrs=72,
     run:
         df = pd.concat(
-            [pd.read_csv(item, header=0, sep="\t", index_col=['REGION', 'INFO', 'FLANK (bp)']) for item in input.region_stats]
+            [pd.read_csv(item, header=0, sep="\t", index_col=['REGION', 'INFO', 'FLANK (bp)', 'ORIGIN']) for item in input.region_stats]
             ,axis=1
         )
 
         # Merge duplicated columns into one
         df = df.groupby(df.columns,axis=1).first()
 
-        # Implement parent stuff here in the future
-        # Write out
+        # Parent stuff here - TODO: make an output for this so snakemake can track it
+        sample_pattern = r'(\S.+)_.+' # i.e. 14455_p1
+        fams = df.columns.str.extract(sample_pattern)[0].unique().tolist()
+        for f in fams:
+            family_df = df.filter(regex=f).dropna()
+            family_df.to_csv(f'{f}-depth_stats.tsv.gz', header=True, sep="\t")
+
+        # Write out merged stats
         df.to_csv(output.merged_stats, header=True, sep="\t")
